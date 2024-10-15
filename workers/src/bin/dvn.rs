@@ -11,7 +11,7 @@ use workers::{
         contracts::{create_contract_instance, query_already_verified, query_confirmations, verify},
     },
     codec::packet_v1_codec,
-    data::Dvn,
+    data::dvn::Dvn,
 };
 
 #[tokio::main]
