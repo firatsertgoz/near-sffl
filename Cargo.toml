@@ -8,7 +8,7 @@ members = [
     "relayer-rs",
     "operator-rs",
     "core-rs",
-    "workers"
+    "workers",
 ]
 
 [workspace.package]

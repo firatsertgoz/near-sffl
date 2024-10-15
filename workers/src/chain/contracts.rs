@@ -75,8 +75,8 @@ pub async fn query_confirmations(contract: &ContractInst, eid: U256) -> Result<U
 pub async fn query_already_verified(
     contract: &ContractInst,
     dvn_address: Address,
-    header_hash: Vec<u8>,
-    payload_hash: Vec<u8>,
+    header_hash: &[u8],
+    payload_hash: &[u8],
     required_confirmations: U256,
 ) -> Result<bool> {
     // Call the `_verified` function on the 302 contract, to check if the DVN has already verified
@@ -88,8 +88,8 @@ pub async fn query_already_verified(
             "_verified",
             &[
                 DynSolValue::Address(dvn_address),             // DVN address
-                DynSolValue::Bytes(header_hash),               // HeaderHash
-                DynSolValue::Bytes(payload_hash),              // PayloadHash
+                DynSolValue::Bytes(header_hash.to_vec()),      // HeaderHash
+                DynSolValue::Bytes(payload_hash.to_vec()),     // PayloadHash
                 DynSolValue::Uint(required_confirmations, 32), // confirmations
             ],
         )?
@@ -109,19 +109,19 @@ pub async fn query_already_verified(
 
 pub async fn verify(
     contract: &ContractInst,
-    packet_header: Vec<u8>,
-    payload: Vec<u8>,
+    packet_header: &[u8],
+    payload: &[u8],
     confirmations: U256,
 ) -> Result<bool> {
     //// Create the hash of the payload
-    let payload_hash = keccak256(&payload);
+    let payload_hash = keccak256(payload);
     //
     // Call the `verified` function on the contract
     let _ = contract
         .function(
             "verify",
             &[
-                DynSolValue::Bytes(packet_header),                     // PacketHeader
+                DynSolValue::Bytes(packet_header.to_vec()),            // PacketHeader
                 DynSolValue::FixedBytes(FixedBytes(payload_hash), 32), // PayloadHash
                 DynSolValue::Uint(confirmations, 64),                  // Confirmations
             ],

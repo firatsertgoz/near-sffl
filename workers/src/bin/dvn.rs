@@ -82,8 +82,8 @@ async fn main() -> Result<()> {
                                 let already_verified = query_already_verified(
                                     &receivelib_contract,
                                     dvn_data.config().dvn_addr()?,
-                                    header.clone(),
-                                    payload.clone(),
+                                    &header,
+                                    &payload,
                                     required_confirmations,
                                 )
                                 .await?;
@@ -95,8 +95,8 @@ async fn main() -> Result<()> {
                                     debug!("Packet NOT verified. Calling verification.");
                                     verify(
                                         &receivelib_contract,
-                                        header,
-                                        payload,
+                                        &header,
+                                        &payload,
                                         required_confirmations,
                                     )
                                     .await?;
