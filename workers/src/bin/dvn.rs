@@ -1,5 +1,6 @@
 //! Main offchain workflow for Nuff's DVN.
 
+use alloy::primitives::{Address, U256};
 use eyre::Result;
 use futures::stream::StreamExt;
 use tracing::{debug, error, info};
@@ -34,7 +35,8 @@ async fn main() -> Result<()> {
 
     // Get the relevant contract ABI, and create contract.
     let receivelib_abi = get_abi_from_path("./abi/ArbitrumReceiveLibUln302.json")?;
-    let receivelib_contract = create_contract_instance(dvn_data.config(), http_provider, receivelib_abi)?;
+    let contract_address = dvn_data.config().receivelib_uln302_addr.parse::<Address>()?;
+    let receivelib_contract = create_contract_instance(contract_address, http_provider, receivelib_abi)?;
 
     info!("Listening to chain events...");
 
@@ -62,16 +64,17 @@ async fn main() -> Result<()> {
 
                             info!("DVNFeePaid event found and decoded.");
                             let required_dvns = inner_log.inner.requiredDVNs.clone();
+                            let own_dvn_addr = dvn_data.config().dvn_addr.parse::<Address>()?;
 
-                            if required_dvns.contains(&dvn_data.config().dvn_addr()?) {
+                            if required_dvns.contains(&own_dvn_addr) {
                                 debug!("Found DVN in required DVNs.");
 
                                 // NOTE: the docs' workflow require now to query L0's endpoint to
                                 // get the address of the MessageLib, but we have already created
                                 // the contract above to query it directly.
 
-                                let required_confirmations =
-                                    query_confirmations(&receivelib_contract, dvn_data.config().eid()).await?;
+                                let eid = U256::from(dvn_data.config().network_id);
+                                let required_confirmations = query_confirmations(&receivelib_contract, eid).await?;
 
                                 // Prepare the header
                                 let header = packet_v1_codec::header(packet.encodedPayload.as_ref()).to_vec();
@@ -81,7 +84,7 @@ async fn main() -> Result<()> {
                                 // Check
                                 let already_verified = query_already_verified(
                                     &receivelib_contract,
-                                    dvn_data.config().dvn_addr()?,
+                                    own_dvn_addr,
                                     &header,
                                     &payload,
                                     required_confirmations,
