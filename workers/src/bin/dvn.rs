@@ -1,24 +1,16 @@
-//! Main offchain workflow for Nuff DVN.
+//! Main offchain workflow for Nuff's DVN.
 
-use alloy::{
-    primitives::hex,
-    sol_types::{SolCall, SolEventInterface, SolInterface},
-};
 use eyre::Result;
 use futures::stream::StreamExt;
 use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
-use workers::abi::{L0V2EndpointAbi::L0V2EndpointAbiEvents, SendLibraryAbi::SendLibraryAbiEvents};
 use workers::{
-    abi::{
-        L0V2EndpointAbi::{self, L0V2EndpointAbiCalls, PacketSent},
-        ReceiveLibraryAbi::{self, ReceiveLibraryAbiCalls},
-        SendLibraryAbi::{self, DVNFeePaid, SendLibraryAbiCalls},
-    },
+    abi::{L0V2EndpointAbi::PacketSent, SendLibraryAbi::DVNFeePaid},
     chain::{
         connections::{build_subscriptions, get_abi_from_path, get_http_provider},
         contracts::{create_contract_instance, query_already_verified, query_confirmations, verify},
     },
+    codec::packet_v1_codec,
     data::Dvn,
 };
 
@@ -26,6 +18,7 @@ use workers::{
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
+        .without_time()
         .with_target(false)
         .with_env_filter(EnvFilter::from_default_env())
         .init();
@@ -51,10 +44,10 @@ async fn main() -> Result<()> {
             Some(log) = endpoint_stream.next() => {
                 match log.log_decode::<PacketSent>() {
                     Err(e) => {
-                        error!("Received an event but failed to decode as `PacketSent`: {:?}", e);
+                        error!("Received an `PacketSent `event but failed to decode it: {:?}", e);
                     }
                     Ok(inner_log) => {
-                        debug!("PacketSent event found and decoded: {:?}", inner_log);
+                        debug!("PacketSent event found and decoded");
                         dvn_data.packet_received(inner_log.data().clone());
                     },
                 }
@@ -62,7 +55,7 @@ async fn main() -> Result<()> {
             Some(log) = sendlib_stream.next() => {
                 match log.log_decode::<DVNFeePaid>() {
                     Err(e) => {
-                        error!("Received an event but failed to decode as `DVNFeePaid`: {:?}", e);
+                        error!("Received a `DVNFeePaid` event but failed to decode it: {:?}", e);
                     }
                     Ok(inner_log) => {
                         if let Some(packet) = dvn_data.packet() {
@@ -81,9 +74,9 @@ async fn main() -> Result<()> {
                                     query_confirmations(&receivelib_contract, dvn_data.config().eid()).await?;
 
                                 // Prepare the header
-                                let header: Vec<u8> = vec![1,2,3,4];
+                                let header = packet_v1_codec::header(packet.encodedPayload.as_ref()).to_vec();
                                 // Prepate the payload.
-                                let payload: Vec<u8> = packet.encodedPayload.to_vec();
+                                let payload = packet_v1_codec::payload(packet.encodedPayload.as_ref()).to_vec();
 
                                 // Check
                                 let already_verified = query_already_verified(
@@ -98,22 +91,15 @@ async fn main() -> Result<()> {
                                 if already_verified {
                                     debug!("Packet already verified.");
                                 } else {
-                                    // If the packet was stored when emited in the PacketSent event.
-                                    if let Some(packet) = dvn_data.packet() {
-                                        dvn_data.verifying();
-                                        debug!("Packet NOT verified. Calling verification.");
-                                        println!("->> Packet: {:?}", packet);
-                                        // FIXME: incorrect data
-                                        verify(
-                                            &receivelib_contract,
-                                            header,
-                                            payload,
-                                            required_confirmations,
-                                        )
-                                        .await?;
-                                    } else {
-                                        debug!("No packet data found. Skipping verification.");
-                                    }
+                                    dvn_data.verifying();
+                                    debug!("Packet NOT verified. Calling verification.");
+                                    verify(
+                                        &receivelib_contract,
+                                        header,
+                                        payload,
+                                        required_confirmations,
+                                    )
+                                    .await?;
                                 }
                             }
                         }

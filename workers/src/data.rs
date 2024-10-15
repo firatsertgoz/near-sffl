@@ -2,6 +2,7 @@ use crate::abi::L0V2EndpointAbi::PacketSent;
 use crate::config;
 use crate::config::DVNConfig;
 use eyre::Result;
+use tracing::debug;
 //use alloy::primitives::{Address, U256};
 
 pub struct Dvn {
@@ -53,6 +54,7 @@ impl Dvn {
     pub fn packet_received(&mut self, packet: PacketSent) {
         self.packet = Some(packet);
         self.status = DvnStatus::PacketReceived;
+        debug!("Packet stored in DVN data");
     }
 
     pub fn reset_packet(&mut self) {
