@@ -11,7 +11,6 @@ use workers::{
         connections::{build_subscriptions, get_abi_from_path, get_http_provider},
         contracts::{create_contract_instance, query_already_verified, query_confirmations, verify},
     },
-    codec::packet_v1_codec,
     data::dvn::Dvn,
 };
 
@@ -60,7 +59,7 @@ async fn main() -> Result<()> {
                         error!("Received a `DVNFeePaid` event but failed to decode it: {:?}", e);
                     }
                     Ok(inner_log) => {
-                        if let Some(packet) = dvn_data.packet() {
+                        if dvn_data.packet().is_some() {
 
                             info!("DVNFeePaid event found and decoded.");
                             let required_dvns = inner_log.inner.requiredDVNs.clone();
@@ -69,41 +68,45 @@ async fn main() -> Result<()> {
                             if required_dvns.contains(&own_dvn_addr) {
                                 debug!("Found DVN in required DVNs.");
 
-                                // NOTE: the docs' workflow require now to query L0's endpoint to
-                                // get the address of the MessageLib, but we have already created
-                                // the contract above to query it directly.
-
-                                let eid = U256::from(dvn_data.config().network_id);
+                                // Query how many confirmations are required.
+                                let eid = U256::from(dvn_data.config().network_eid);
                                 let required_confirmations = query_confirmations(&receivelib_contract, eid).await?;
 
-                                // Prepare the header
-                                let header = packet_v1_codec::header(packet.encodedPayload.as_ref()).to_vec();
-                                // Prepate the payload.
-                                let payload = packet_v1_codec::payload(packet.encodedPayload.as_ref()).to_vec();
+                                // Prepare the header hash.
+                                let header_hash = dvn_data.get_header_hash();
+                                // Prepate the payload hash.
+                                let message_hash = dvn_data.get_message_hash();
 
-                                // Check
-                                let already_verified = query_already_verified(
-                                    &receivelib_contract,
-                                    own_dvn_addr,
-                                    &header,
-                                    &payload,
-                                    required_confirmations,
-                                )
-                                .await?;
-
-                                if already_verified {
-                                    debug!("Packet already verified.");
-                                } else {
-                                    dvn_data.verifying();
-                                    debug!("Packet NOT verified. Calling verification.");
-                                    verify(
+                                // Check if the info from the payload could have been extracted.
+                                if let (Some(header), Some(payload)) = (header_hash, message_hash) {
+                                    let already_verified = query_already_verified(
                                         &receivelib_contract,
-                                        &header,
-                                        &payload,
+                                        own_dvn_addr,
+                                        header.as_ref(),
+                                        payload.as_ref(),
                                         required_confirmations,
                                     )
                                     .await?;
+
+                                    if already_verified {
+                                        debug!("Packet already verified.");
+                                    } else {
+                                        dvn_data.verifying();
+                                        debug!("Packet NOT verified. Calling verification.");
+
+                                        // FIXME: logic for NFFL verification
+
+                                        verify(
+                                            &receivelib_contract,
+                                            // SAFETY: if-let above fails before this.
+                                            &dvn_data.get_header().unwrap().to_slice(),
+                                            payload.as_ref(),
+                                            required_confirmations,
+                                        ).await?;
+                                    }
                                 }
+                            } else {
+                                dvn_data.reset_packet();
                             }
                         }
                     }

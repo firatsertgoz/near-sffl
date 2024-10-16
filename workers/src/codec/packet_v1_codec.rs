@@ -1,4 +1,4 @@
-use crate::abi::Packet;
+use crate::abi::PacketStruct;
 use crate::codec::bytes_utils::BytesUtils;
 
 pub const PACKET_VERSION: u8 = 1;
@@ -18,7 +18,7 @@ const RECEIVER_OFFSET: usize = 49;
 const GUID_OFFSET: usize = 81;
 const MESSAGE_OFFSET: usize = 113;
 
-pub fn encode(packet: &Packet) -> Vec<u8> {
+pub fn encode(packet: &PacketStruct) -> Vec<u8> {
     [
         &PACKET_VERSION.to_be_bytes()[..],
         &packet.nonce.to_be_bytes()[..],
@@ -32,7 +32,7 @@ pub fn encode(packet: &Packet) -> Vec<u8> {
     .concat()
 }
 
-pub fn encode_packet_header(packet: &Packet) -> Vec<u8> {
+pub fn encode_packet_header(packet: &PacketStruct) -> Vec<u8> {
     [
         &PACKET_VERSION.to_be_bytes()[..],
         &packet.nonce.to_be_bytes()[..],

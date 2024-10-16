@@ -14613,6 +14613,7 @@ dependencies = [
  "alloy 0.4.2",
  "alloy-json-abi 0.8.8",
  "blsful",
+ "bytes",
  "config",
  "dotenvy",
  "eyre",
