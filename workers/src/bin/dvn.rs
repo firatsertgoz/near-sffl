@@ -27,14 +27,14 @@ async fn main() -> Result<()> {
     let mut dvn_data = Dvn::new_from_env()?;
 
     // Create the WS subscriptions for listening to the events.
-    let (_provider, mut endpoint_stream, mut sendlib_stream) = build_subscriptions(dvn_data.config()).await?;
+    let (_provider, mut endpoint_stream, mut sendlib_stream) = build_subscriptions(&dvn_data.config).await?;
 
     // Create an HTTP provider to call contract functions.
-    let http_provider = get_http_provider(dvn_data.config())?;
+    let http_provider = get_http_provider(&dvn_data.config)?;
 
     // Get the relevant contract ABI, and create contract.
     let receivelib_abi = get_abi_from_path("./abi/ArbitrumReceiveLibUln302.json")?;
-    let contract_address = dvn_data.config().receivelib_uln302_addr.parse::<Address>()?;
+    let contract_address = dvn_data.config.receivelib_uln302_addr.parse::<Address>()?;
     let receivelib_contract = create_contract_instance(contract_address, http_provider, receivelib_abi)?;
 
     info!("Listening to chain events...");
@@ -59,17 +59,17 @@ async fn main() -> Result<()> {
                         error!("Received a `DVNFeePaid` event but failed to decode it: {:?}", e);
                     }
                     Ok(inner_log) => {
-                        if dvn_data.packet().is_some() {
+                        if dvn_data.packet.is_some() {
 
                             info!("DVNFeePaid event found and decoded.");
                             let required_dvns = inner_log.inner.requiredDVNs.clone();
-                            let own_dvn_addr = dvn_data.config().dvn_addr.parse::<Address>()?;
+                            let own_dvn_addr = dvn_data.config.dvn_addr.parse::<Address>()?;
 
                             if required_dvns.contains(&own_dvn_addr) {
                                 debug!("Found DVN in required DVNs.");
 
                                 // Query how many confirmations are required.
-                                let eid = U256::from(dvn_data.config().network_eid);
+                                let eid = U256::from(dvn_data.config.network_eid);
                                 let required_confirmations = query_confirmations(&receivelib_contract, eid).await?;
 
                                 // Prepare the header hash.
