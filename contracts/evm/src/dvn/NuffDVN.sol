@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 import { ILayerZeroEndpointV2 } from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import { ILayerZeroEndpoint } from "@layerzerolabs/lz-evm-v1-0.7/contracts/interfaces/ILayerZeroEndpoint.sol";
 import { PacketV1Codec } from "@layerzerolabs/lz-evm-protocol-v2/contracts/messagelib/libs/PacketV1Codec.sol";
 import { ISendLib } from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ISendLib.sol";
 
-import { ILayerZeroEndpoint } from "./interfaces/ILayerZeroEndpoint.sol";
-import { ILayerZeroDVN } from "./interfaces/ILayerZeroDVN.sol";
-import { IReceiveUlnE2 } from "./interfaces/IReceiveUlnE2.sol";
-import "./interfaces/INuffClient.sol";
+import { INuffClient } from "./interfaces/INuffClient.sol";
 import { INuffDVNConfig } from "./interfaces/INuffDVNConfig.sol";
+
+import { ReentrancyGuard } from "@solady/src/utils/ReentrancyGuard.sol";
 
 contract NuffDVN is ILayerZeroDVN, AccessControl {
     using PacketV1Codec for bytes;
@@ -93,6 +93,8 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
         uint256 jobId = ++lastJobId;
         Job storage newJob = jobs[jobId];
 
+        require(_param.sender != address(0), "Invalid sender address");
+
         newJob.origin = msg.sender;
         newJob.srcEid = layerZeroEndpointV2.eid();
         newJob.dstEid = _param.dstEid;
@@ -121,7 +123,7 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
         bytes calldata _reqId,
         INuffClient.BSLSign calldata _signature,
         bytes calldata gatewaySignature
-    ) external {
+    ) external ReentrancyGuard.nonReentrant {
         require(_isLocal(_dstEid), "Invalid dstEid");
         require(
             !verifiedJobs[_srcEid][_jobId],
@@ -218,7 +220,6 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
         bytes calldata reqId,
         bytes32 hash,
         INuffClient.BLSSign calldata sign,
-        address nuffValidGateway,
         bytes calldata gatewaySignature
     ) internal {
         bool verified = nuff.nuffVerify(
@@ -228,16 +229,6 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
             nuffPublicKey
         );
         require(verified, "Invalid signature!");
-
-        if (nuffValidGateway != address(0)) {
-            hash = hash.toEthSignedMessageHash();
-            address gatewaySignatureSigner = hash.recover(gatewaySignature);
-
-            require(
-                gatewaySignatureSigner == nuffValidGateway,
-                "Gateway is not valid"
-            );
-        }
     }
 
     function _lzVerify(

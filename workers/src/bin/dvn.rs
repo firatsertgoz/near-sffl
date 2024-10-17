@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
             Some(log) = endpoint_stream.next() => {
                 match log.log_decode::<PacketSent>() {
                     Err(e) => {
-                        error!("Received an `PacketSent `event but failed to decode it: {:?}", e);
+                        error!("Received a `PacketSent` event but failed to decode it: {:?}", e);
                     }
                     Ok(inner_log) => {
                         debug!("PacketSent event found and decoded");
