@@ -18,7 +18,6 @@ struct UlnConfig {
 /// @dev should be implemented by the ReceiveUln302 contract and future ReceiveUln contracts on EndpointV2
 interface IReceiveUlnE2 {
     /// @notice for each dvn to verify the payload
-    /// @dev this function signature 0x0223536e
     function verify(
         bytes calldata _packetHeader,
         bytes32 _payloadHash,

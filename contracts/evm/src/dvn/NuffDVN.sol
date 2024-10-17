@@ -5,14 +5,14 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
-import { ILayerZeroEndpointV2 } from "./interfaces/ILayerZeroEndpointV2.sol";
+import { ILayerZeroEndpointV2 } from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import { ILayerZeroEndpoint } from "./interfaces/ILayerZeroEndpoint.sol";
 import { ILayerZeroDVN } from "./interfaces/ILayerZeroDVN.sol";
-import { ISendLib } from "./interfaces/ISendLib.sol";
+import { ISendLib } from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ISendLib.sol";
 import { IReceiveUlnE2, Verification, UlnConfig} from "./interfaces/IReceiveUlnE2.sol";
 
 import "./interfaces/INuffClient.sol";
-import "./utils/PacketV1Codec.sol";
+import { PacketV1Codec } from "@layerzerolabs/lz-evm-protocol-v2/contracts/messagelib/libs/PacketV1Codec.sol";
 import { INuffDVNConfig } from "./interfaces/INuffDVNConfig.sol";
 
 contract NuffDVN is ILayerZeroDVN, AccessControl {
@@ -119,7 +119,7 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
         uint64 _confirmations,
         address _receiver,
         bytes calldata _reqId,
-        INuffClient.SchnorrSign calldata _signature,
+        INuffClient.BSLSign calldata _signature,
         bytes calldata gatewaySignature
     ) external {
         require(_isLocal(_dstEid), "Invalid dstEid");
@@ -206,9 +206,9 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
     }
 
     function getFee(
-        uint32, // _dstEid
-        uint64, // _confirmations
-        address, // _sender
+        uint32,        // _dstEid
+        uint64,        // _confirmations
+        address,       // _sender
         bytes calldata // _options
     ) external view override returns (uint256 _fee) {
         _fee = fee;
@@ -217,7 +217,7 @@ contract NuffDVN is ILayerZeroDVN, AccessControl {
     function _verifyNuffSig(
         bytes calldata reqId,
         bytes32 hash,
-        INuffClient.SchnorrSign calldata sign,
+        INuffClient.BLSSign calldata sign,
         address nuffValidGateway,
         bytes calldata gatewaySignature
     ) internal {

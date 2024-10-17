@@ -2,21 +2,26 @@
 pragma solidity ^0.8.0;
 
 interface INuffClient {
-    struct SchnorrSign {
-        uint256 signature;
+    struct BLSSign {
+        Signature signature;
         address owner;
         address nonce;
     }
 
+    struct Signature {
+        uint[2] X;
+        uint[2] Y;
+    }
+
     struct PublicKey {
-        uint256 x;
-        uint8 parity;
+        uint x;
+        uint y;
     }
 
     function nuffVerify(
         bytes calldata reqId,
         uint256 hash,
-        SchnorrSign memory signature,
+        BLSSign memory signature,
         PublicKey memory pubKey
     ) external returns (bool);
 }
