@@ -2,7 +2,7 @@
 
 pragma solidity >=0.8.0;
 
-import {IWorker} from "./IWorker.sol";
+import { IWorker } from "@layerzerolabs/lz-evm-messagelib-v2/contracts/interfaces/IWorker.sol";
 import {ILayerZeroDVN} from "./ILayerZeroDVN.sol";
 
 interface IDVN is IWorker, ILayerZeroDVN {
