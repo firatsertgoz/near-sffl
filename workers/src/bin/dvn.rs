@@ -1,9 +1,9 @@
 //! Main offchain workflow for Nuff's DVN.
 
 use alloy::primitives::{Address, U256};
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use futures::stream::StreamExt;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use workers::{
     abi::{L0V2EndpointAbi::PacketSent, SendLibraryAbi::DVNFeePaid},
@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
     let http_provider = get_http_provider(&dvn_data.config)?;
 
     // Get the relevant contract ABI, and create contract.
-    let receivelib_abi = get_abi_from_path("./abi/ArbitrumReceiveLibUln302.json")?;
+    let receivelib_abi = get_abi_from_path("./abi/ReceiveLibUln302.json")?;
     let contract_address = dvn_data.config.receivelib_uln302_addr.parse::<Address>()?;
     let receivelib_contract = create_contract_instance(contract_address, http_provider, receivelib_abi)?;
 
@@ -58,32 +58,31 @@ async fn main() -> Result<()> {
                     Err(e) => {
                         error!("Received a `DVNFeePaid` event but failed to decode it: {:?}", e);
                     }
-                    Ok(inner_log) => {
-                        if dvn_data.packet.is_some() {
+                    Ok(inner_log) if dvn_data.packet.is_some() => {
+                        info!("DVNFeePaid event found and decoded.");
+                        let required_dvns = &inner_log.inner.requiredDVNs;
+                        let own_dvn_addr = dvn_data.config.dvn_addr.parse::<Address>()?;
 
-                            info!("DVNFeePaid event found and decoded.");
-                            let required_dvns = inner_log.inner.requiredDVNs.clone();
-                            let own_dvn_addr = dvn_data.config.dvn_addr.parse::<Address>()?;
+                        if required_dvns.contains(&own_dvn_addr) {
+                            debug!("Found DVN in required DVNs.");
 
-                            if required_dvns.contains(&own_dvn_addr) {
-                                debug!("Found DVN in required DVNs.");
+                            // Query how many confirmations are required.
+                            let eid = U256::from(dvn_data.config.network_eid);
+                            let required_confirmations = query_confirmations(&receivelib_contract, eid).await?;
 
-                                // Query how many confirmations are required.
-                                let eid = U256::from(dvn_data.config.network_eid);
-                                let required_confirmations = query_confirmations(&receivelib_contract, eid).await?;
+                            // Prepare the header hash.
+                            let header_hash = dvn_data.get_header_hash();
+                            // Prepate the payload hash.
+                            let message_hash = dvn_data.get_message_hash();
 
-                                // Prepare the header hash.
-                                let header_hash = dvn_data.get_header_hash();
-                                // Prepate the payload hash.
-                                let message_hash = dvn_data.get_message_hash();
-
-                                // Check if the info from the payload could have been extracted.
-                                if let (Some(header), Some(payload)) = (header_hash, message_hash) {
+                            // Check if the info from the payload could have been extracted.
+                            match (header_hash, message_hash) {
+                                (Some(header_hash), Some(message_hash)) => {
                                     let already_verified = query_already_verified(
                                         &receivelib_contract,
                                         own_dvn_addr,
-                                        header.as_ref(),
-                                        payload.as_ref(),
+                                        header_hash.as_ref(),
+                                        message_hash.as_ref(),
                                         required_confirmations,
                                     )
                                     .await?;
@@ -98,17 +97,26 @@ async fn main() -> Result<()> {
 
                                         verify(
                                             &receivelib_contract,
-                                            // SAFETY: if-let above fails before this.
-                                            &dvn_data.get_header().unwrap().to_slice(),
-                                            payload.as_ref(),
+                                            &dvn_data.get_header().ok_or_eyre("Cannot extract header from payload")?.to_slice(),
+                                            message_hash.as_ref(),
                                             required_confirmations,
                                         ).await?;
                                     }
                                 }
-                            } else {
-                                dvn_data.reset_packet();
+                                (_, None) => {
+                                    error!("Cannot payload hash");
+                                }
+                                (None, _) => {
+                                    error!("Cannot message hash");
+                                }
                             }
+                        } else {
+                            dvn_data.reset_packet();
                         }
+
+                    }
+                    Ok(_)=> {
+                        warn!("Received a `DVNFeePaid` event but don't have information about the `Packet` to be verified");
                     }
                 }
             },
